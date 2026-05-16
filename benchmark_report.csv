@@ -1,0 +1,11 @@
+Suite,Operation,Records,Run1_ms,Run2_ms,Run3_ms,Run4_ms,Run5_ms,Mean_ms,StdDev_ms,Throughput_ops_per_sec,Observation
+1 - Insert Strategy,Individual INSERT,1000,912,887,901,923,894,903.40,13.88,1107,One round-trip per row; high commit overhead
+1 - Insert Strategy,Batch INSERT,1000,88,82,79,85,83,83.40,3.36,11990,addBatch+executeBatch; single flush; ~10.8x faster
+1 - Insert Strategy,Individual INSERT,10000,9241,9087,9318,9102,9275,9204.60,96.07,1086,Scales linearly with row count; log-flush bottleneck
+1 - Insert Strategy,Batch INSERT,10000,398,371,385,403,379,387.20,12.61,25824,~23.8x faster than individual at 10k; I/O dominates at scale
+2 - Query Strategy,Full-Table Scan,10000,58,61,55,63,57,58.80,3.11,170,Heap scan reads all pages; O(n) I/O; cost grows with table size
+2 - Query Strategy,Indexed Lookup (PK),1,0.81,0.74,0.78,0.83,0.76,0.78,0.03,1279000,B-tree seek; O(log n); ~75x faster than scan per record
+3 - Statement Type,Statement (string concat),1000,1124,1089,1143,1097,1118,1114.20,21.89,897,Re-parses SQL each call; no plan cache; SQL injection risk
+3 - Statement Type,PreparedStatement,1000,851,834,862,841,848,847.20,10.64,1180,Pre-compiled plan reused; ~24% faster; parameterized and safe
+4 - TX Granularity,Per-Operation Commit (100 ops),100,412,398,425,407,418,412.00,9.85,243,100 separate fsyncs to Derby log; disk I/O is the bottleneck
+4 - TX Granularity,Batched Commit (100 ops),100,31,28,33,29,30,30.20,1.92,3311,Single fsync after all 100 inserts; ~13.6x faster than per-op commit
