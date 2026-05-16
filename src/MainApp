@@ -1,0 +1,208 @@
+import java.sql.*;
+import java.util.Scanner;
+
+/**
+ * MainApp
+ * Console-driven entry point for the Library Loan Management System.
+ * Orchestrates ConnectionManager → TransactionService → BusinessLogic.
+ */
+public class MainApp {
+
+    private static Connection        conn;
+    private static TransactionService txService;
+    private static BusinessLogic     bl;
+    private static PerformanceEvaluator perf;
+    private static final Scanner sc = new Scanner(System.in);
+
+    // ---------------------------------------------------------------
+    // Main
+    // ---------------------------------------------------------------
+
+    public static void main(String[] args) {
+        System.out.println("╔══════════════════════════════════════════════╗");
+        System.out.println("║    Library Loan Management System (Derby)    ║");
+        System.out.println("╚══════════════════════════════════════════════╝");
+
+        try {
+            conn      = ConnectionManager.getConnection();
+            txService = new TransactionService(conn);
+            bl        = new BusinessLogic(conn, txService);
+            perf      = new PerformanceEvaluator(conn);
+            mainLoop();
+        } catch (SQLException e) {
+            System.err.println("Fatal DB error: " + e.getMessage());
+        } finally {
+            sc.close();
+            ConnectionManager.shutdown();
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Main menu loop
+    // ---------------------------------------------------------------
+
+    private static void mainLoop() {
+        boolean running = true;
+        while (running) {
+            printMenu();
+            String choice = sc.nextLine().trim();
+            switch (choice) {
+                case "1"  -> menuRegisterMember();
+                case "2"  -> menuAddBook();
+                case "3"  -> menuProcessLoan();
+                case "4"  -> menuReturnBook();
+                case "5"  -> menuListMembers();
+                case "6"  -> menuListBooks();
+                case "7"  -> menuActiveLoans();
+                case "8"  -> menuOverdueBooks();
+                case "9"  -> menuSearchBook();
+                case "10" -> menuPerformanceBenchmark();
+                case "11" -> menuDemoRollback();
+                case "0"  -> running = false;
+                default   -> System.out.println("Invalid option. Try again.");
+            }
+        }
+        System.out.println("Goodbye!");
+    }
+
+    private static void printMenu() {
+        System.out.println("\n══════════════════ MAIN MENU ══════════════════");
+        System.out.println(" 1.  Register a Member");
+        System.out.println(" 2.  Add a Book");
+        System.out.println(" 3.  Process Loan (issue book)");
+        System.out.println(" 4.  Return Book");
+        System.out.println(" 5.  List All Members");
+        System.out.println(" 6.  List All Books");
+        System.out.println(" 7.  View Active Loans");
+        System.out.println(" 8.  View Overdue Books");
+        System.out.println(" 9.  Search Books by Title");
+        System.out.println(" 10. Run Performance Benchmarks");
+        System.out.println(" 11. Demo: ACID Rollback on Constraint Violation");
+        System.out.println(" 0.  Exit");
+        System.out.print("Choice: ");
+    }
+
+    // ---------------------------------------------------------------
+    // Menu handlers
+    // ---------------------------------------------------------------
+
+    private static void menuRegisterMember() {
+        System.out.println("\n--- Register Member ---");
+        System.out.print("Full Name  : "); String name  = sc.nextLine().trim();
+        System.out.print("Email      : "); String email = sc.nextLine().trim();
+        System.out.print("Phone      : "); String phone = sc.nextLine().trim();
+
+        if (name.isEmpty() || email.isEmpty()) {
+            System.out.println("Name and email are required."); return;
+        }
+        int id = bl.registerMember(name, email, phone);
+        if (id > 0) System.out.println("✔ Member registered with ID: " + id);
+        else        System.out.println("✘ Registration failed (duplicate email?).");
+    }
+
+    private static void menuAddBook() {
+        System.out.println("\n--- Add Book ---");
+        System.out.print("ISBN   : "); String isbn   = sc.nextLine().trim();
+        System.out.print("Title  : "); String title  = sc.nextLine().trim();
+        System.out.print("Author : "); String author = sc.nextLine().trim();
+        System.out.print("Genre  : "); String genre  = sc.nextLine().trim();
+
+        if (isbn.isEmpty() || title.isEmpty()) {
+            System.out.println("ISBN and title are required."); return;
+        }
+        int id = bl.addBook(isbn, title, author, genre);
+        if (id > 0) System.out.println("✔ Book added with ID: " + id);
+        else        System.out.println("✘ Add book failed (duplicate ISBN?).");
+    }
+
+    private static void menuProcessLoan() {
+        System.out.println("\n--- Process Loan ---");
+        try {
+            bl.listBooks();
+            System.out.print("Enter Book ID   : "); int bookId   = readInt();
+            bl.listMembers();
+            System.out.print("Enter Member ID : "); int memberId = readInt();
+            boolean ok = bl.processLoan(bookId, memberId);
+            System.out.println(ok ? "✔ Loan processed successfully." : "✘ Loan failed.");
+        } catch (SQLException e) {
+            System.err.println("Error listing: " + e.getMessage());
+        }
+    }
+
+    private static void menuReturnBook() {
+        System.out.println("\n--- Return Book ---");
+        try {
+            bl.listActiveLoans(0);
+            System.out.print("Enter Loan ID to return: "); int loanId = readInt();
+            boolean ok = bl.returnBook(loanId);
+            System.out.println(ok ? "✔ Book returned successfully." : "✘ Return failed.");
+        } catch (SQLException e) {
+            System.err.println("Error: " + e.getMessage());
+        }
+    }
+
+    private static void menuListMembers() {
+        try { bl.listMembers(); } catch (SQLException e) {
+            System.err.println("Error: " + e.getMessage());
+        }
+    }
+
+    private static void menuListBooks() {
+        try { bl.listBooks(); } catch (SQLException e) {
+            System.err.println("Error: " + e.getMessage());
+        }
+    }
+
+    private static void menuActiveLoans() {
+        System.out.print("Filter by Member ID (0 = all): ");
+        int memberId = readInt();
+        try { bl.listActiveLoans(memberId); } catch (SQLException e) {
+            System.err.println("Error: " + e.getMessage());
+        }
+    }
+
+    private static void menuOverdueBooks() {
+        try { bl.listOverdueBooks(); } catch (SQLException e) {
+            System.err.println("Error: " + e.getMessage());
+        }
+    }
+
+    private static void menuSearchBook() {
+        System.out.print("Enter keyword: ");
+        String kw = sc.nextLine().trim();
+        try { bl.searchBooks(kw); } catch (SQLException e) {
+            System.err.println("Error: " + e.getMessage());
+        }
+    }
+
+    private static void menuPerformanceBenchmark() {
+        System.out.println("\n[!] Performance benchmarks may take 1–3 minutes.");
+        System.out.print("Proceed? (y/n): ");
+        if (sc.nextLine().trim().equalsIgnoreCase("y")) {
+            perf.runAllBenchmarks();
+        } else {
+            System.out.println("Benchmark cancelled.");
+        }
+    }
+
+    private static void menuDemoRollback() {
+        System.out.println("\n--- ACID Rollback Demonstration ---");
+        String email = "test_rollback_" + System.currentTimeMillis() + "@demo.org";
+        System.out.println("Using test email: " + email);
+        bl.demonstrateRollback(email);
+    }
+
+    // ---------------------------------------------------------------
+    // Input helper
+    // ---------------------------------------------------------------
+
+    private static int readInt() {
+        while (true) {
+            try {
+                return Integer.parseInt(sc.nextLine().trim());
+            } catch (NumberFormatException e) {
+                System.out.print("Please enter a valid number: ");
+            }
+        }
+    }
+}
