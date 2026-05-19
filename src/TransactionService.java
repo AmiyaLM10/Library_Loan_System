@@ -34,7 +34,6 @@ public class TransactionService {
      */
     public boolean processLoan(int bookId, int memberId) {
         Savepoint sp1 = null;
-        Savepoint sp2 = null;
 
         try {
             conn.setAutoCommit(false);
@@ -61,9 +60,6 @@ public class TransactionService {
             // Step 4 – Insert loan record
             insertLoanRecord(bookId, memberId);
             System.out.println("[TX] Loan record inserted.");
-
-            // SP2 – before member counter
-            sp2 = conn.setSavepoint("SP_BEFORE_MEMBER_UPDATE");
 
             // Step 6 – Increment member ActiveLoans
             updateMemberActiveLoans(memberId, +1);
@@ -260,7 +256,7 @@ public class TransactionService {
 
     private void insertLoanRecord(int bookId, int memberId) throws SQLException {
         String sql = "INSERT INTO Loans (BookID, MemberID, DueDate) " +
-                     "VALUES (?, ?, {fn TIMESTAMPADD(SQL_TSI_DAY, 14, CURRENT_DATE)})";
+                     "VALUES (?, ?, CAST({fn TIMESTAMPADD(SQL_TSI_DAY, 14, CURRENT_DATE)} AS DATE))";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, bookId);
             ps.setInt(2, memberId);
