@@ -7,20 +7,19 @@ import java.sql.*;
  */
 public class ConnectionManager {
 
-    private static final String DB_URL    = "jdbc:derby:librarydb;create=true";
-    private static final String DRIVER    = "org.apache.derby.jdbc.EmbeddedDriver";
+    private static final String DB_URL = "jdbc:derby:librarydb;create=true";
     private static Connection   connection = null;
 
-    // ---------------------------------------------------------------
-    // Boot
-    // ---------------------------------------------------------------
-
-    /** Load the Derby driver (required for older Derby versions). */
     static {
         try {
-            Class.forName(DRIVER);
+            // AutoloadedDriver works on Derby 10.11+ with JDK 9+
+            Class.forName("org.apache.derby.jdbc.AutoloadedDriver");
         } catch (ClassNotFoundException e) {
-            System.err.println("[ConnectionManager] Derby driver not found: " + e.getMessage());
+            try {
+                Class.forName("org.apache.derby.jdbc.EmbeddedDriver");
+            } catch (ClassNotFoundException ex) {
+                System.err.println("[ConnectionManager] Derby driver not found: " + ex.getMessage());
+            }
         }
     }
 
